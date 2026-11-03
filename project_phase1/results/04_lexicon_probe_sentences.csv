@@ -1,0 +1,11 @@
+sentence,VADER_compound,TextBlob_polarity,TextBlob_subjectivity,SentiWordNet
+This moisturizer is good.,0.44,0.7,0.6,0.438
+This moisturizer is not good.,-0.341,-0.35,0.6,0.083
+This moisturizer is GOOD!!!,0.671,1.0,0.6,0.438
+This moisturizer is very good.,0.493,0.91,0.78,0.292
+"The scent is nice, but it broke me out terribly.",-0.827,-0.2,1.0,0.271
+Love it :),0.802,0.5,0.8,0.5
+Meh. It's ok I guess.,0.226,0.5,0.5,0.25
+"Smells amazing, my skin feels so soft.",0.586,0.35,0.625,-0.031
+"Waste of money, it burned my scalp.",-0.421,-0.2,0.0,0.0
+Not bad at all.,0.431,0.35,0.667,-0.625

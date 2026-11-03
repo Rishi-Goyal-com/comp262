@@ -1,0 +1,247 @@
+
+==============================================================================
+LOAD DATA
+==============================================================================
+Raw shape: 5,269 rows x 12 columns
+Columns: ['overall', 'verified', 'reviewTime', 'reviewerID', 'asin', 'style', 'reviewerName', 'reviewText', 'summary', 'unixReviewTime', 'vote', 'image']
+
+==============================================================================
+STEP 1 - DATA EXPLORATION
+==============================================================================
+        column  dtype  missing  missing_%  unique                                            meaning
+       overall  int64        0       0.00       5            Star rating given by the reviewer (1-5)
+      verified   bool        0       0.00       2               True if Amazon verified the purchase
+    reviewTime    str        0       0.00     883                  Review date as text (MM DD, YYYY)
+    reviewerID    str        0       0.00     991                             Anonymised reviewer id
+          asin    str        0       0.00      85 Amazon product id (one id per size/colour variant)
+         style object      645      12.24     408      Dict of variant attributes (Size, Color, ...)
+  reviewerName    str        0       0.00     905                       Display name of the reviewer
+    reviewText    str        5       0.09    1363                                 Body of the review
+       summary    str        5       0.09    1011                            Review headline / title
+unixReviewTime  int64        0       0.00     883                    Review date as a Unix timestamp
+          vote    str     4717      89.52      24            Number of 'helpful' votes (missing = 0)
+         image object     5171      98.14      25              URLs of images posted with the review
+  [table]  results/01_data_dictionary.csv
+
+Reviews: 5,269   Products: 85   Reviewers: 991
+Average rating: 4.772  (median 5, std 0.743)
+Verified purchases: 81.2%
+Reviews with helpful votes: 10.5%   with images: 1.9%
+Date range: 2004-09-21 to 2018-08-23
+Rating counts: {1: 115, 2: 64, 3: 109, 4: 332, 5: 4649}
+  [figure] figures/01_rating_distribution.png
+
+Fully identical rows (all fields except style/image): 1044
+Same reviewer + same text + same time (copied across variants): 3,890 (73.8% of rows)
+Unique reviews after removing copies: 1,379
+How many asins each unique review is copied to: {1: 410, 2: 91, 3: 23, 4: 720, 5: 135}
+Copies with conflicting ratings: 0  (copies are true duplicates)
+  [figure] figures/02_duplicate_copies.png
+
+Reviews per product (raw):   mean 62.0, median 6, max 1794
+Reviews per product (dedup): mean 21.9, median 4, max 480  over 63 products
+Top 5 products hold 77.6% of unique reviews; top 2 hold 62.5%
+  [table]  results/02_top20_products.csv
+  [figure] figures/03_reviews_per_product.png
+  [figure] figures/04_product_rating_vs_popularity.png
+
+Reviews per user (raw):   min 4, mean 5.32, max 12  <- the 5-core guarantee
+Reviews per user (dedup): min 1, mean 1.39, max 11; 86.2% of users wrote only 1 unique review
+  [figure] figures/05_reviews_per_user.png
+
+Review length (words, dedup): mean 56.8, median 29, Q1 11, Q3 71, max 962
+IQR upper fence = 161 words -> 106 long outliers (7.7%); 124 reviews of 3 words or fewer; 1 empty
+Length by rating:
+         count   mean  median  max
+overall                           
+1           30   42.4    28.0  200
+2           26  114.7   119.0  315
+3           64  117.4   114.0  336
+4          153   92.9    75.0  405
+5         1106   47.4    23.0  962
+  [table]  results/03_length_by_rating.csv
+  [figure] figures/06_review_length.png
+Summary length: mean 4.4 words, median 3, max 27
+
+Rating mix by verified status (row %):
+overall       1      2      3      4      5
+verified                                   
+False     0.006  0.037  0.114  0.244  0.599
+True      0.030  0.010  0.012  0.044  0.905
+Avg rating verified 4.78 vs not verified 4.39
+Helpful votes by rating:
+         share_voted  mean_votes
+overall                         
+1              0.333       1.300
+2              0.192       0.962
+3              0.188       1.562
+4              0.046       0.484
+5              0.115       2.024
+Reviews with images: 25 (avg rating 4.52)
+Style attribute keys (raw rows): {'Size': 4358, 'Color': 378, 'Style Name': 40, 'Design': 21, 'Flavor': 12, 'Scent Name': 10}
+  [figure] figures/07_other_attributes.png
+
+Auto-generated summaries ('Five Stars' etc.): 307 (22.3%) - these restate the rating, so they leak the label
+Most common summaries: {'Five Stars': 286, 'Four Stars': 13, 'Love it': 7, 'Great': 7, 'Great product': 7, 'Love it!': 6, 'My results': 4, 'One Star': 3}
+  [figure] figures/08_top_words_by_class.png
+  [figure] figures/09_wordclouds.png
+
+==============================================================================
+STEP 2 - LABELLING, COLUMN SELECTION, OUTLIERS
+==============================================================================
+Label distribution (unique reviews):
+  Negative     56  (4.1%)
+  Neutral      64  (4.6%)
+  Positive   1259  (91.3%)
+  [figure] figures/10_label_distribution.png
+
+Invalid ratings: 0
+Empty text after combining summary + body: 1 -> removed
+Reviews with >20% non-ASCII characters: 0
+Reviews with HTML entities/tags: 10, with URLs: 3
+Long-review outliers kept: 106
+Clean modelling pool: 1,378 reviews
+
+==============================================================================
+STEP 3 - LEXICON STUDY
+==============================================================================
+                                        sentence  VADER_compound  TextBlob_polarity  TextBlob_subjectivity  SentiWordNet
+                       This moisturizer is good.           0.440               0.70                  0.600         0.438
+                   This moisturizer is not good.          -0.341              -0.35                  0.600         0.083
+                     This moisturizer is GOOD!!!           0.671               1.00                  0.600         0.438
+                  This moisturizer is very good.           0.493               0.91                  0.780         0.292
+The scent is nice, but it broke me out terribly.          -0.827              -0.20                  1.000         0.271
+                                      Love it :)           0.802               0.50                  0.800         0.500
+                           Meh. It's ok I guess.           0.226               0.50                  0.500         0.250
+          Smells amazing, my skin feels so soft.           0.586               0.35                  0.625        -0.031
+             Waste of money, it burned my scalp.          -0.421              -0.20                  0.000         0.000
+                                 Not bad at all.           0.431               0.35                  0.667        -0.625
+  [table]  results/04_lexicon_probe_sentences.csv
+  [table]  results/05_lexicon_comparison.csv
+
+Chosen lexicons: VADER and TextBlob. SentiWordNet scores 'not good' the same as 'good', ignores emphasis and emoji, and depends on error-prone sense selection.
+
+==============================================================================
+STEP 4 - MODEL-SPECIFIC PRE-PROCESSING
+==============================================================================
+Example review:
+  original   : I didn't feel like it was actually shampoo. So watered down, I didn't feel like it was actually shampoo. I tried twice then threw it away.
+  VADER      : I didn't feel like it was actually shampoo. So watered down, I didn't feel like it was actually shampoo. I tried twice then threw it away.
+  TextBlob   : not feel like actually shampoo so watered not feel like actually shampoo tried twice threw away
+  aggressive : feel like actually shampoo watered feel like actually shampoo tried twice threw away
+
+==============================================================================
+STEP 5 - RANDOM SAMPLE OF 1000 REVIEWS
+==============================================================================
+Test sample: 1000 reviews   Development set (rest): 378 reviews
+Sample labels: {'Negative': 38, 'Neutral': 51, 'Positive': 911}
+Dev labels:    {'Negative': 18, 'Neutral': 13, 'Positive': 347}
+  [table]  results/06_random_sample_1000.csv
+
+Pre-processing ablation (development set, default thresholds):
+   model                                   pre-processing  accuracy  macro_F1 chosen
+   VADER                                      P0 raw text     0.892     0.455       
+   VADER    P1 light clean (keep case, punct, stop words)     0.892     0.455    yes
+   VADER               P2 lower + contractions + no punct     0.892     0.456       
+   VADER P3 P2 + drop stop words except negations + lemma     0.881     0.437       
+   VADER              P4 P2 + drop ALL stop words + lemma     0.892     0.416       
+TextBlob                                      P0 raw text     0.889     0.460       
+TextBlob    P1 light clean (keep case, punct, stop words)     0.889     0.460       
+TextBlob               P2 lower + contractions + no punct     0.886     0.464       
+TextBlob P3 P2 + drop stop words except negations + lemma     0.894     0.506    yes
+TextBlob              P4 P2 + drop ALL stop words + lemma     0.894     0.492       
+  [table]  results/07_preprocessing_ablation_dev.csv
+  [figure] figures/11_preprocessing_ablation.png
+
+Tuned thresholds on dev: VADER pos>=0.4, neg<=-0.4 (dev macro-F1 0.555); TextBlob pos>=0.075, neg<=0.05 (dev macro-F1 0.596)
+
+==============================================================================
+STEP 6 - MODELLING (VADER and TextBlob)
+==============================================================================
+      label  vader_score vader_pred  textblob_score textblob_pred
+0  Positive       0.7650   Positive        0.500000      Positive
+1  Positive       0.8021   Positive        0.300000      Positive
+2  Positive       0.9935   Positive        0.244213      Positive
+3   Neutral       0.1154   Positive        0.174554      Positive
+4  Positive       0.8715   Positive        0.650000      Positive
+5  Positive       0.0000    Neutral       -0.126786      Negative
+6  Positive       0.4389   Positive        0.150000      Positive
+7  Positive       0.9612   Positive        0.185714      Positive
+8  Positive       0.9590   Positive        0.211111      Positive
+9  Positive       0.5719   Positive        1.000000      Positive
+  [table]  results/08_sample_predictions.csv
+  [figure] figures/12_score_distribution_by_label.png
+
+==============================================================================
+STEP 7 - VALIDATION AND COMPARISON
+==============================================================================
+Comparison table (1000-review test sample):
+                              model  accuracy  macro_precision  macro_recall  macro_F1  weighted_F1  F1_Negative  F1_Neutral  F1_Positive
+Majority baseline (always Positive)     0.911            0.304         0.333     0.318        0.869        0.000       0.000        0.953
+         VADER (default thresholds)     0.891            0.471         0.467     0.469        0.884        0.432       0.023        0.951
+      TextBlob (default thresholds)     0.866            0.403         0.405     0.404        0.861        0.234       0.044        0.933
+          VADER (tuned (0.4, -0.4))     0.859            0.520         0.487     0.490        0.872        0.361       0.177        0.932
+     TextBlob (tuned (0.075, 0.05))     0.834            0.385         0.463     0.391        0.848        0.225       0.030        0.919
+  [table]  results/09_comparison_table.csv
+
+Classification report - VADER (default thresholds):
+              precision    recall  f1-score   support
+
+    Negative      0.444     0.421     0.432        38
+     Neutral      0.028     0.020     0.023        51
+    Positive      0.942     0.959     0.951       911
+
+    accuracy                          0.891      1000
+   macro avg      0.471     0.467     0.469      1000
+weighted avg      0.876     0.891     0.884      1000
+
+
+Classification report - TextBlob (default thresholds):
+              precision    recall  f1-score   support
+
+    Negative      0.231     0.237     0.234        38
+     Neutral      0.051     0.039     0.044        51
+    Positive      0.927     0.939     0.933       911
+
+    accuracy                          0.866      1000
+   macro avg      0.403     0.405     0.404      1000
+weighted avg      0.856     0.866     0.861      1000
+
+  [figure] figures/13_confusion_matrices.png
+  [figure] figures/14_model_comparison.png
+
+VADER vs TextBlob: agree on 91.8% of reviews, Cohen's kappa 0.421, score correlation r = 0.270
+Both correct 85.0%, both wrong 9.3%
+  [figure] figures/15_vader_vs_textblob.png
+
+Accuracy by review length (words):
+               reviews  VADER_acc  TextBlob_acc
+length_bucket                                  
+1-10             253.0      0.897         0.866
+11-30            268.0      0.948         0.922
+31-70            220.0      0.891         0.882
+71-150           164.0      0.878         0.829
+150+              95.0      0.737         0.737
+  [table]  results/10_accuracy_by_length.csv
+  [figure] figures/16_accuracy_by_length.png
+
+Robustness check on all 1,378 unique reviews:
+                        model  accuracy  macro_precision  macro_recall  macro_F1  weighted_F1  F1_Negative  F1_Neutral  F1_Positive
+   VADER (all unique reviews)     0.891            0.464         0.467     0.465        0.885        0.429       0.018        0.949
+TextBlob (all unique reviews)     0.874            0.436         0.437     0.437        0.870        0.339       0.034        0.937
+  [table]  results/11_full_pool_metrics.csv
+
+Most confident errors:
+  [VADER] true=Neutral  pred=Positive score=+0.987 | Concerned About Active Ingredient. I thought this rinse might be a more palatable alternative to Listerine Total Care.  
+  [VADER] true=Neutral  pred=Positive score=+0.987 | Not for Cellulite, But Great for Exfoliating! Obviously, cellulite is not affected by a brush. Simple biology reveals th
+  [VADER] true=Neutral  pred=Positive score=+0.983 | I Am Not Happy With the Explanation As to Why This Is Geared Toward People Over 50. I tried both the one liter and 500 m
+  [VADER] true=Negative pred=Positive score=+0.983 | Not So Great for Volume ... Both times that I experimented with the product, I found the results unsatisfactory. It made
+  [VADER] true=Neutral  pred=Positive score=+0.977 | I Am Not Happy With the Explanation As to Why This is for People Over 50. I have problems with my teeth so my dentist re
+  [VADER] true=Neutral  pred=Positive score=+0.970 | YES It Works Quite Well ~ But Unpleasent Odor ~. I just recently started shaving again with an electric razor after 40 y
+  [TextBlob] true=Neutral  pred=Positive score=+0.800 | This product is a great deal. They don't sell this in the salon ... This product is a great deal. They don't sell this i
+  [TextBlob] true=Neutral  pred=Positive score=+0.480 | Color doesn't look good on. Way to light. You have to put on 4 coats and it still doesn't look very good. It looks nice 
+  [TextBlob] true=Neutral  pred=Positive score=+0.419 | Good light scent. Good light scent. Have received complements from people that I smell nice after using it. 3 stars beca
+  [TextBlob] true=Negative pred=Positive score=+0.410 | smells great for 5 minutes. I am very dissapointed in this. It smells so good at first but the smell goes completely awa
+  [TextBlob] true=Negative pred=Positive score=+0.380 | It didn't work for my psoriasis. I really like using organic products and this product had awesome reviews. Ive been see
+  [TextBlob] true=Negative pred=Positive score=+0.342 | Didn't smell like redcurrant and basil to me. I was really hoping this scent would be true to it's name, and that it wou
+  [table]  results/12_error_examples.csv

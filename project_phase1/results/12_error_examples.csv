@@ -1,0 +1,15 @@
+model,true,pred,score,text
+VADER,Neutral,Positive,0.987,"Concerned About Active Ingredient. I thought this rinse might be a more palatable alternative to Listerine Total Care.  But with average performance and a questionable active ingredient, it is unlikely that I will use th"
+VADER,Neutral,Positive,0.987,"Not for Cellulite, But Great for Exfoliating! Obviously, cellulite is not affected by a brush. Simple biology reveals the massive flaws in this idea. If what one is truly seeking is to improve cellulite, one wants a cell"
+VADER,Neutral,Positive,0.983,"I Am Not Happy With the Explanation As to Why This Is Geared Toward People Over 50. I tried both the one liter and 500 millileter bottles of this product. They are the same but for the size. Both reviews are the same.
+
+I"
+VADER,Negative,Positive,0.983,"Not So Great for Volume ... Both times that I experimented with the product, I found the results unsatisfactory. It made my hair a bit smoother, but I couldn't achieve any real volume with it. The best I can say, is that"
+VADER,Neutral,Positive,0.977,I Am Not Happy With the Explanation As to Why This is for People Over 50. I have problems with my teeth so my dentist really wants me to use some sort of dental rinse. I have tried a few of the Crest Pro Health products.
+VADER,Neutral,Positive,0.97,"YES It Works Quite Well ~ But Unpleasent Odor ~. I just recently started shaving again with an electric razor after 40 years of blades. I bought the&nbsp;<a data-hook=""product-link-linked"" class=""a-link-normal"" href=""/Ph"
+TextBlob,Neutral,Positive,0.8,"This product is a great deal. They don't sell this in the salon ... This product is a great deal. They don't sell this in the salon anymore, you can only find it online. It is a great product if you are looking for a shi"
+TextBlob,Neutral,Positive,0.48,Color doesn't look good on. Way to light. You have to put on 4 coats and it still doesn't look very good. It looks nice in the bottle but it's too pale on your fingers and toes.
+TextBlob,Neutral,Positive,0.419,Good light scent. Good light scent. Have received complements from people that I smell nice after using it. 3 stars because bottle is kind of small for a shower gel (size compariso photo attached) and it doesnt really he
+TextBlob,Negative,Positive,0.41,smells great for 5 minutes. I am very dissapointed in this. It smells so good at first but the smell goes completely away after 5 mionutes.
+TextBlob,Negative,Positive,0.38,It didn't work for my psoriasis. I really like using organic products and this product had awesome reviews. Ive been seeing a dermatologist for my psoriasis and received a much of topical cream and even steroid injection
+TextBlob,Negative,Positive,0.342,"Didn't smell like redcurrant and basil to me. I was really hoping this scent would be true to it's name, and that it would smell of redcurrant and basil.  Wearing it, I smell neither one of those scents (both of which I "

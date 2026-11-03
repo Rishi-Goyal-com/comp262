@@ -1,0 +1,10 @@
+Property,VADER,TextBlob,SentiWordNet
+Lexicon size,"~7,500 entries incl. slang, emoticons, emoji","~2,900 adjectives (pattern)","~117,000 synsets (WordNet)"
+Built for,Social media / short informal text,General text,"General text, per word sense"
+Negation,Yes (3-word window),Yes ('not' flips),No
+Intensifiers / CAPS / !!!,Yes / Yes / Yes,Yes / No / No,No / No / No
+"Emoticons, emoji",Yes,Some emoticons,No
+'but' contrast,Yes (weights 2nd clause),No,No
+Needs POS tagging / WSD,No,No,Yes / Yes (hard)
+Output,"pos/neu/neg + compound [-1,1]","polarity [-1,1] + subjectivity [0,1]",pos/neg/obj per synset
+Chosen,YES,YES,No

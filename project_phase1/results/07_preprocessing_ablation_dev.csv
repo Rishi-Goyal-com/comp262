@@ -1,0 +1,11 @@
+model,pre-processing,accuracy,macro_F1,chosen
+VADER,P0 raw text,0.892,0.455,
+VADER,"P1 light clean (keep case, punct, stop words)",0.892,0.455,yes
+VADER,P2 lower + contractions + no punct,0.892,0.456,
+VADER,P3 P2 + drop stop words except negations + lemma,0.881,0.437,
+VADER,P4 P2 + drop ALL stop words + lemma,0.892,0.416,
+TextBlob,P0 raw text,0.889,0.46,
+TextBlob,"P1 light clean (keep case, punct, stop words)",0.889,0.46,
+TextBlob,P2 lower + contractions + no punct,0.886,0.464,
+TextBlob,P3 P2 + drop stop words except negations + lemma,0.894,0.506,yes
+TextBlob,P4 P2 + drop ALL stop words + lemma,0.894,0.492,

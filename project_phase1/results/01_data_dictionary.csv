@@ -1,0 +1,13 @@
+column,dtype,missing,missing_%,unique,meaning
+overall,int64,0,0.0,5,Star rating given by the reviewer (1-5)
+verified,bool,0,0.0,2,True if Amazon verified the purchase
+reviewTime,str,0,0.0,883,"Review date as text (MM DD, YYYY)"
+reviewerID,str,0,0.0,991,Anonymised reviewer id
+asin,str,0,0.0,85,Amazon product id (one id per size/colour variant)
+style,object,645,12.24,408,"Dict of variant attributes (Size, Color, ...)"
+reviewerName,str,0,0.0,905,Display name of the reviewer
+reviewText,str,5,0.09,1363,Body of the review
+summary,str,5,0.09,1011,Review headline / title
+unixReviewTime,int64,0,0.0,883,Review date as a Unix timestamp
+vote,str,4717,89.52,24,Number of 'helpful' votes (missing = 0)
+image,object,5171,98.14,25,URLs of images posted with the review

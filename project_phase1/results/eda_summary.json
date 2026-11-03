@@ -1,0 +1,13 @@
+{
+  "raw_rows": 5269,
+  "products": 85,
+  "reviewers": 991,
+  "avg_rating": 4.772,
+  "duplicate_copies": 3890,
+  "unique_reviews": 1379,
+  "median_words": 29.0,
+  "iqr_upper_fence_words": 161.0,
+  "long_outliers": 106,
+  "empty_reviews": 1,
+  "auto_summaries": 307
+}
