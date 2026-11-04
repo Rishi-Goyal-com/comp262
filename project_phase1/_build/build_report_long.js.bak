@@ -1,0 +1,452 @@
+// Builds the Phase 1 analysis report (.docx) for COMP 262 Team 2
+const fs = require("fs");
+const path = require("path");
+const {
+  Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell,
+  HeadingLevel, AlignmentType, WidthType, ShadingType, BorderStyle, PageBreak,
+  TableOfContents, LevelFormat, Footer, PageNumber, Header,
+} = require("docx");
+
+const PROJ = "C:\\Users\\rishi\\OneDrive\\Desktop\\ARIES\\COMP-262\\project_phase1";
+const FIG = path.join(PROJ, "figures");
+const T = JSON.parse(fs.readFileSync(path.join(__dirname, "tables.json"), "utf8"));
+const SIZES = JSON.parse(fs.readFileSync(path.join(__dirname, "sizes.json"), "utf8"));
+
+const FONT = "Calibri";
+const ACCENT = "00798C";
+const CONTENT_W = 9360; // 6.5" in DXA
+
+// ---------- helpers ----------
+// inline **bold** markup -> runs
+function runs(text, opts = {}) {
+  return text.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map((s) =>
+    s.startsWith("**") ? new TextRun({ text: s.slice(2, -2), bold: true, ...opts }) : new TextRun({ text: s, ...opts }));
+}
+const P = (text, opts = {}) => new Paragraph({ children: runs(text), spacing: { after: 120, line: 276 }, ...opts });
+const H1 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(t)] });
+const H2 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(t)] });
+const H3 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun(t)] });
+const B = (t, level = 0) => new Paragraph({ numbering: { reference: "bullets", level }, children: runs(t), spacing: { after: 60 } });
+const N = (t, ref = "numbers") => new Paragraph({ numbering: { reference: ref, level: 0 }, children: runs(t), spacing: { after: 60 } });
+const pageBreak = () => new Paragraph({ children: [new PageBreak()] });
+
+let figNo = 0, tabNo = 0;
+function figure(file, widthIn, caption) {
+  const [w, h] = SIZES[file];
+  const wPx = widthIn * 96, hPx = wPx * h / w;
+  figNo += 1;
+  return [
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 }, keepNext: true,
+      children: [new ImageRun({ type: "png", data: fs.readFileSync(path.join(FIG, file)),
+        transformation: { width: Math.round(wPx), height: Math.round(hPx) },
+        altText: { title: caption, description: caption, name: file } })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 },
+      children: [new TextRun({ text: `Figure ${figNo}. `, bold: true, size: 18, color: "555555" }),
+                 new TextRun({ text: caption, italics: true, size: 18, color: "555555" })] }),
+  ];
+}
+
+const border = { style: BorderStyle.SINGLE, size: 4, color: "BFBFBF" };
+const borders = { top: border, bottom: border, left: border, right: border };
+// rows: array of arrays (first = header); widths in DXA summing to CONTENT_W (or less)
+function table(rows, widths, caption, { highlight = () => false, fontSize = 18 } = {}) {
+  const total = widths.reduce((a, b) => a + b, 0);
+  tabNo += 1;
+  const out = [];
+  if (caption) out.push(new Paragraph({ spacing: { before: 160, after: 60 }, keepNext: true,
+    children: [new TextRun({ text: `Table ${tabNo}. `, bold: true, size: 18, color: "555555" }),
+               new TextRun({ text: caption, italics: true, size: 18, color: "555555" })] }));
+  out.push(new Table({
+    width: { size: total, type: WidthType.DXA }, columnWidths: widths,
+    rows: rows.map((r, i) => new TableRow({
+      tableHeader: i === 0, cantSplit: true,
+      children: r.map((c, j) => new TableCell({
+        borders, width: { size: widths[j], type: WidthType.DXA },
+        margins: { top: 50, bottom: 50, left: 90, right: 90 },
+        shading: i === 0 ? { fill: ACCENT, type: ShadingType.CLEAR, color: "auto" }
+          : highlight(r, i) ? { fill: "E6F4F1", type: ShadingType.CLEAR, color: "auto" }
+          : i % 2 === 0 ? { fill: "F7F7F7", type: ShadingType.CLEAR, color: "auto" } : undefined,
+        children: [new Paragraph({ children: runs(String(c), { size: fontSize, bold: i === 0 ? true : undefined,
+          color: i === 0 ? "FFFFFF" : undefined, font: FONT }) })],
+      })),
+    })),
+  }));
+  out.push(new Paragraph({ spacing: { after: 120 }, children: [] }));
+  return out;
+}
+const tbl = (name) => [T.cols[name], ...T.rows[name]];
+const f3 = (x) => Number(x).toFixed(3);
+
+// ---------- content ----------
+const children = [];
+
+// Cover page
+children.push(
+  new Paragraph({ spacing: { before: 2200 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "COMP 262 - Natural Language Processing and Recommender Systems", size: 26, color: "555555" })] }),
+  new Paragraph({ spacing: { before: 400, after: 200 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Sentiment Analysis of Amazon All Beauty Reviews", size: 48, bold: true, color: ACCENT })] }),
+  new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Phase 1: Data Exploration, Pre-processing and Lexicon-based Models (VADER and TextBlob)", size: 28 })] }),
+  new Paragraph({ spacing: { before: 900 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Team 2", size: 32, bold: true })] }),
+  ...[
+    "Rishi Goyal - 301361102",
+    "[Team member 2 - Student ID]",
+    "[Team member 3 - Student ID]",
+    "[Team member 4 - Student ID]",
+  ].map((t) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: t, size: 24 })] })),
+  new Paragraph({ spacing: { before: 900 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Centennial College - School of Engineering Technology and Applied Science", size: 22, color: "555555" })] }),
+  new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Professor: [Name]    |    Submitted: November 5, 2026", size: 22, color: "555555" })] }),
+  pageBreak(),
+);
+
+// TOC
+children.push(
+  new Paragraph({ children: [new TextRun({ text: "Table of Contents", bold: true, size: 32, font: FONT, color: ACCENT })], spacing: { after: 200 } }),
+  new TableOfContents("Table of Contents", { hyperlink: true, headingStyleRange: "1-2" }),
+  P("Right-click the table above and choose **Update Field** if page numbers are missing.", { spacing: { before: 200 } }),
+  pageBreak(),
+);
+
+// 1. Introduction
+children.push(
+  H1("1. Introduction"),
+  P("This report covers Phase 1 of the COMP 262 project: building a sentiment analyser for products from customers' written reviews using a **lexicon-based approach**. Team 2 was assigned the **Amazon All Beauty** dataset. Phase 1 covers loading and exploring the data, cleaning and labelling it, choosing two sentiment lexicons, pre-processing the text for each lexicon, and building and validating the two lexicon models on a random sample of 1,000 reviews. Phase 2 will add machine-learning models, a recommender-system study and LLM tasks, and will be appended to this report."),
+  P("All results in this report come from one documented script, **team2_phase1_lexicon_sentiment.py**, which downloads the data, writes every figure into ./figures and every table into ./results, and runs from start to finish in under a minute. A fixed random seed (42) makes every number reproducible."),
+  H2("1.1 Dataset and publishers"),
+  P("We use the **All Beauty 5-core** file (All_Beauty_5.json.gz) from the **Amazon Review Data (2018)** collection published by **Jianmo Ni, Jiacheng Li and Julian McAuley** (UC San Diego), described in their EMNLP 2019 paper (see References). A 5-core subset keeps only users and products with at least five reviews each. As required for Phase 1, we use this small k-core subset; Phase 2 will use the full All Beauty file."),
+);
+
+// 2. Data exploration
+const dd = tbl("01_data_dictionary");
+children.push(
+  pageBreak(),
+  H1("2. Data Exploration"),
+  H2("2.1 Attributes and missing values"),
+  P("The raw file has **5,269 reviews and 12 columns**. Table 1 describes every attribute, its type, how many values are missing and what it means. The text fields are almost complete (5 empty reviews), while vote (89.5% missing) and image (98.1% missing) are sparse by nature: a missing vote means nobody marked the review helpful, and a missing image means none was posted."),
+  ...table(dd.map((r, i) => i === 0 ? ["Column", "Type", "Missing", "Missing %", "Unique", "Meaning"] : r),
+    [1450, 800, 900, 1000, 900, 4310], "Data dictionary of the raw All Beauty 5-core file"),
+  H2("2.2 Counts and averages"),
+  ...table([
+    ["Measure", "Value"],
+    ["Reviews (rows)", "5,269"], ["Unique products (asin)", "85"], ["Unique reviewers", "991"],
+    ["Average rating", "4.77 (median 5, std 0.74)"], ["5-star share", "88.2% (4,649 reviews)"],
+    ["Verified purchases", "81.2%"], ["Reviews with at least one helpful vote", "10.5%"],
+    ["Reviews with images", "1.9%"], ["Date range", "21 Sep 2004 to 23 Aug 2018"],
+  ], [4680, 4680], "Headline statistics (raw data)"),
+  P("The data is **heavily skewed towards positive ratings**: 88% of rows are 5 stars and only 3.4% are 1 or 2 stars (Figure 1). This imbalance matters for every later step, because a model that always says \"Positive\" already looks accurate."),
+  ...figure("01_rating_distribution.png", 4.8, "Rating distribution in the raw data"),
+
+  H2("2.3 Duplicates: the most important finding"),
+  P("Checking for duplicates changed our view of the whole dataset. Amazon shows the same review on every **size or colour variant** of a product, and each variant has its own asin. So one review written once by one person appears as several rows. We define a duplicate as the same **reviewer + review text + timestamp**."),
+  B("**3,890 of 5,269 rows (73.8%) are copies.** Only **1,379 reviews are unique**."),
+  B("720 unique reviews are repeated under 4 different asins, and 135 under 5 (Figure 2)."),
+  B("No copy ever has a different rating from its original, so the copies are true duplicates and safe to drop."),
+  B("1,044 rows are identical in every field except style and image."),
+  P("Keeping the copies would make a single review count up to five times in training and testing, and would let the same text appear in both the development and test samples. **All modelling therefore uses the 1,379 unique reviews.** The exploration below shows both views where the difference matters."),
+  ...figure("02_duplicate_copies.png", 4.8, "Number of product variants each unique review is copied to"),
+
+  H2("2.4 Distribution of reviews across products and per product"),
+  P("Reviews are spread very unevenly across products (Figure 3). In the raw file one product (B0012Y0ZG2) has 1,794 rows, but after de-duplication the largest product has 480 unique reviews. After de-duplication only **63 products** keep any reviews, with a **median of 4** and a mean of 21.9 reviews per product. The **top 2 products hold 62.5%** of all unique reviews and **7 of 63 products hold 80%**, a classic long-tail (Pareto) pattern. Any product-level conclusion is therefore driven by a handful of items."),
+  ...figure("03_reviews_per_product.png", 6.4, "Left: reviews per product, raw vs unique (log scale). Right: cumulative share of reviews across products"),
+  P("Figure 4 shows each product's average rating against its number of reviews. Products with few reviews spread from 1 to 5 stars, while popular products all sit between 4.5 and 5. Averages based on a few reviews are unreliable, which is useful to know for the Phase 2 recommender."),
+  ...figure("04_product_rating_vs_popularity.png", 4.6, "Average rating vs number of unique reviews per product"),
+
+  H2("2.5 Distribution of reviews per user"),
+  P("In the raw rows every reviewer has 4 to 12 reviews, as the 5-core filter promises (the minimum is 4 rather than 5 because of small inconsistencies in the published file). After de-duplication the picture is very different: **86.2% of reviewers wrote only one unique review**, the mean is 1.39 and the maximum is 11 (Figure 5). Most of the 5-core guarantee comes from variant copies, so the data is far sparser per user than the name 5-core suggests."),
+  ...figure("05_reviews_per_user.png", 6.4, "Reviews per user: raw rows (left) and unique reviews (right)"),
+
+  H2("2.6 Review lengths and outliers"),
+  P("Unique reviews have a **median of 29 words** (mean 56.8, max 962). The distribution is right-skewed (Figure 6). With the IQR rule (Q1 = 11, Q3 = 71, upper fence = Q3 + 1.5 x IQR = **161 words**), **106 reviews (7.7%) are long outliers**. At the other end, 124 reviews have 3 words or fewer (e.g. \"Love it!\") and 1 review is empty."),
+  ...figure("06_review_length.png", 6.5, "Review length histogram, box plot and length by star rating"),
+  ...table([["Rating", "Reviews", "Mean words", "Median words", "Max words"],
+    ...T.rows["03_length_by_rating"].map((r) => [r[0], r[1], r[2], r[3], r[4]])],
+    [1872, 1872, 1872, 1872, 1872], "Review length by rating (unique reviews)"),
+  P("**Length tells us something about sentiment.** 2- and 3-star reviews are the longest (median about 115 words), while 5-star reviews are the shortest (median 23) and 1-star reviews are also short (median 28). Mixed opinions take more words to explain (\"I liked the smell, but...\"), while very happy and very angry customers are brief. This already suggests that **neutral reviews will be the hardest for a lexicon**, because they contain both positive and negative words."),
+
+  H2("2.7 Other attributes and relationships"),
+  B("**Verified vs rating:** 90.5% of verified reviews are 5-star (average 4.78), but only 59.9% of unverified ones are (average 4.39). Unverified reviewers give far more 3- and 4-star ratings, which fits free-sample or early-reviewer programmes, where people write more balanced reviews."),
+  B("**Helpful votes vs rating:** 1-star reviews are the most likely to get a helpful vote (33.3%), compared with 4.6% of 4-star reviews. Shoppers find negative reviews more informative."),
+  B("**Over time:** reviews grow from 2012 and peak in 2017 (about 300 unique reviews). The average rating stays around 4.6 to 4.9 but drops to about 4.0 in 2018 (Figure 7)."),
+  B("**Style (variant) attributes:** Size appears in 4,358 rows and Color in 378. This confirms that most products are sold in several sizes, which explains the duplicate copies."),
+  B("**Summaries:** the review title has a median of 3 words. **307 unique reviews (22.3%) have an automatically generated title** such as \"Five Stars\" or \"One Star\". These titles simply repeat the rating (see Section 3.2)."),
+  ...figure("07_other_attributes.png", 6.3, "Reviews per year with average rating, verified status, helpful votes and variant attributes"),
+
+  H2("2.8 Vocabulary by sentiment"),
+  P("Figures 8 and 9 show the most frequent words (stop words removed) for each class, using the labels defined in Section 3. Positive reviews contain clear sentiment words (\"love\", \"great\", \"good\") next to product words (\"hair\", \"soap\", \"skin\", \"scent\"). The top 15 negative words contain **no explicitly negative word at all**: \"like\", \"really\", \"hair\", \"smell\", \"water\" and \"shampoo\" lead, because complaints are usually descriptive (\"it felt like water\"). The neutral list is dominated by \"alcohol\", \"crest\" and \"mouth\", because many 3-star reviews are about one mouthwash product. **\"like\" is in the top 3 of every class.** VADER treats it as a positive word, so \"It smells like chemicals.\" gets a compound score of +0.36, while in reviews \"like\" is often just a comparison. TextBlob scores the same sentence 0. This is an early warning that VADER in particular will over-predict Positive."),
+  ...figure("08_top_words_by_class.png", 6.5, "Top 15 words per sentiment class"),
+  ...figure("09_wordclouds.png", 6.5, "Word clouds per sentiment class"),
+
+  H2("2.9 Exploration conclusions"),
+  N("Three quarters of the raw rows are duplicates caused by product variants; only 1,379 reviews are unique."),
+  N("The data is extremely imbalanced (91% positive after labelling), so **accuracy is a misleading metric**. We use macro-averaged F1 as the main metric and compare against an always-Positive baseline."),
+  N("Reviews and products follow a long tail: a few products and many one-time reviewers."),
+  N("Neutral and 2-star reviews are long and mixed, which predicts that lexicon models will struggle on the Neutral class."),
+  N("The auto-generated \"X Stars\" titles leak the label and must not be used as model input."),
+);
+
+// 3. Basic pre-processing
+children.push(
+  pageBreak(),
+  H1("3. Text Basic Pre-processing"),
+  H2("3.1 Labelling"),
+  P("Each review is labelled from its star rating (overall): **4-5 = Positive, 3 = Neutral, 1-2 = Negative**. On the 1,379 unique reviews this gives:"),
+  ...table([["Label", "Ratings", "Reviews", "Share"], ["Positive", "4, 5", "1,259", "91.3%"], ["Neutral", "3", "64", "4.6%"], ["Negative", "1, 2", "56", "4.1%"]],
+    [2340, 2340, 2340, 2340], "Sentiment labels on unique reviews"),
+  ...figure("10_label_distribution.png", 4.4, "Sentiment label distribution"),
+  H2("3.2 Column selection"),
+  P("A lexicon model reads only text, so the choice is mostly about which text to score and which columns support cleaning and labelling."),
+  ...table([
+    ["Column", "Used for", "Reason"],
+    ["reviewText", "Model input", "The main opinion text. Holds almost all of the sentiment words."],
+    ["summary", "Model input (prefixed to the body)", "Short, opinion-dense headlines such as \"Smells heavenly\" or \"Waste of money\" add strong signals. Joined with a full stop so VADER treats it as its own sentence."],
+    ["summary = \"Five Stars\" etc.", "Removed", "Amazon generates these titles from the rating, so they leak the label. They also carry no lexicon sentiment, so keeping them would only add noise."],
+    ["overall", "Label only", "Ground truth for the Positive / Neutral / Negative label. Never shown to the models."],
+    ["reviewerID, unixReviewTime", "De-duplication key", "Together with reviewText they identify one written review."],
+    ["asin", "Exploration only", "Product id. Needed in Phase 2 for the recommender."],
+    ["verified, vote, image, style", "Exploration only", "Metadata with no opinion words. Useful for exploration but a lexicon cannot use them."],
+    ["reviewerName, reviewTime", "Not used", "Personal / redundant (reviewTime duplicates unixReviewTime)."],
+  ], [2300, 2200, 4860], "Columns chosen for the sentiment analyser and why"),
+  H2("3.3 Outliers"),
+  ...table([
+    ["Check", "Finding", "Decision"],
+    ["Duplicate copies", "3,890 rows (73.8%)", "Removed - keep one copy of each review"],
+    ["Invalid ratings", "0 (all ratings are 1-5)", "Nothing to do"],
+    ["Empty text", "1 review", "Removed - nothing to score"],
+    ["Very short reviews (3 words or fewer)", "124", "Kept - short but clearly opinionated (\"Love it!\")"],
+    ["Long reviews (> 161 words, IQR fence)", "106 (7.7%)", "Kept - they are real reviews and mostly 2-4 star, i.e. the minority classes we need. Their accuracy is checked separately in Section 7."],
+    ["HTML entities / tags, URLs", "10 / 3 reviews", "Cleaned (unescaped and stripped) in pre-processing"],
+    ["Non-English text (> 20% non-ASCII)", "0", "Nothing to do"],
+  ], [3000, 2300, 4060], "Outlier checks and decisions"),
+  P("After these steps the **clean modelling pool has 1,378 unique reviews**."),
+);
+
+// 4. Lexicon study
+const probe = tbl("04_lexicon_probe_sentences");
+children.push(
+  pageBreak(),
+  H1("4. Lexicon Study and Selection"),
+  P("We studied three lexicon packages: **VADER**, **TextBlob** and **SentiWordNet**. Besides reading their documentation, we scored ten probe sentences written in the style of beauty reviews (Table 8) to see how each lexicon handles negation, emphasis, emoticons and contrast."),
+  ...table(tbl("05_lexicon_comparison"), [2300, 2500, 2300, 2260], "Comparison of the three lexicons", { highlight: (r) => r[0] === "Chosen" }),
+  ...table([["Sentence", "VADER", "TextBlob", "SentiWordNet"], ...probe.slice(1).map((r) => [r[0], r[1], r[2], r[4]])],
+    [4560, 1600, 1600, 1600], "Probe sentences: VADER compound, TextBlob polarity and SentiWordNet score (-1 to +1)"),
+  H2("4.1 What the probes show"),
+  B("**Negation:** \"not good\" flips to negative in VADER (-0.34) and TextBlob (-0.35). SentiWordNet still scores it as positive (+0.08) because it scores words on their own."),
+  B("**Emphasis:** \"GOOD!!!\" is stronger than \"good\" in VADER (0.67 vs 0.44), because VADER has rules for capital letters and exclamation marks. SentiWordNet ignores both."),
+  B("**Contrast:** \"The scent is nice, but it broke me out terribly\" is clearly negative. VADER gets this right (-0.83) because it gives more weight to the clause after \"but\". TextBlob is weakly negative (-0.20) and SentiWordNet says positive (+0.27)."),
+  B("**Emoticons:** \"Love it :)\" gets a high score from VADER (0.80)."),
+  B("**SentiWordNet fails in obvious ways:** \"Not bad at all\" is -0.63 and \"Smells amazing, my skin feels so soft\" is -0.03, because it picks the most common sense of each word without any context."),
+  H2("4.2 Choice: VADER and TextBlob"),
+  P("**VADER** was chosen because it was built for short, informal, opinion-heavy text like product reviews. It handles negation, intensifiers (\"very\", \"so\"), capital letters, exclamation marks, emoticons and \"but\" contrasts, and it needs no training data. Its compound score from -1 to +1 has documented thresholds."),
+  P("**TextBlob** was chosen as the second model because it works differently. Its lexicon (from the Pattern library) is mostly adjectives such as \"soft\", \"greasy\" and \"amazing\", which suit product reviews, and it handles negation and intensifiers. It also gives a **subjectivity** score that we can use later. Because the two models make different mistakes, comparing them tells us more than comparing two similar models would."),
+  P("**SentiWordNet was not chosen.** It needs POS tagging and word-sense disambiguation, it has no negation or emphasis rules, and it failed the simplest probes."),
+);
+
+// 5. Model-specific pre-processing
+const abl = tbl("07_preprocessing_ablation_dev");
+children.push(
+  pageBreak(),
+  H1("5. Pre-processing for Each Model"),
+  P("Lexicon models do not learn, so pre-processing has to keep exactly the signals each lexicon's rules use. The \"classic\" NLP pipeline (lower-case, remove punctuation and stop words, lemmatise) can **destroy** those signals: NLTK's stop-word list contains \"not\", \"no\", \"very\", \"too\" and \"but\". We therefore designed a different pipeline for each model and tested it (Section 5.3)."),
+  H2("5.1 Steps applied to both models"),
+  ...table([
+    ["Step", "Justification"],
+    ["Combine summary + body", "Adds the opinion-dense headline (Section 3.2). Auto-generated \"X Stars\" titles are removed first."],
+    ["Unescape HTML (&amp; -> &) and strip tags", "10 reviews contain HTML such as &nbsp; or <a href...>. These are not words and only confuse tokenisation."],
+    ["Remove URLs", "3 reviews contain links. They carry no sentiment."],
+    ["Squeeze repeated characters (\"sooooo\" -> \"soo\")", "Stretched words do not match lexicon entries. Two letters are kept so the emphasis is not lost."],
+    ["Normalise whitespace", "Removes line breaks and double spaces left by the cleaning."],
+  ], [3600, 5760], "Shared cleaning steps"),
+  H2("5.2 Model-specific steps"),
+  ...table([
+    ["Step", "VADER", "TextBlob", "Why"],
+    ["Lower-case", "No", "Yes", "VADER uses CAPS as emphasis (\"GOOD\" > \"good\"). TextBlob's lexicon is lower-case and has no CAPS rule."],
+    ["Punctuation", "Keep", "Remove", "VADER uses \"!\" and \"?\" for intensity and \"but\" clauses. TextBlob gains nothing from them."],
+    ["Expand contractions", "No", "Yes", "VADER's lexicon already contains \"isn't\" and \"don't\". TextBlob needs \"is not\" as a separate word for its negation rule."],
+    ["Stop words", "Keep all", "Remove, but keep negations and intensifiers", "VADER's rules depend on \"not\", \"very\" and \"but\". TextBlob only flips polarity when the negation comes right before the sentiment word, so removing other stop words brings \"not ... good\" together."],
+    ["Lemmatisation", "No", "Yes", "VADER's lexicon already has inflected forms. Lemmatising maps \"smells\" and \"scents\" onto TextBlob's base entries."],
+    ["Emoticons / emoji", "Keep", "Removed with punctuation", "VADER scores them. TextBlob mostly ignores them."],
+  ], [1700, 1200, 1900, 4560], "Pre-processing steps per model"),
+  P("Example review: \"I didn't feel like it was actually shampoo. So watered down...\"", { spacing: { after: 40 } }),
+  B("**VADER input:** unchanged. The text was already clean, and case, punctuation and \"didn't\" are all kept."),
+  B("**TextBlob input:** \"not feel like actually shampoo so watered not feel like actually shampoo tried twice threw away\""),
+  B("**Aggressive pipeline:** \"feel like actually shampoo watered feel like ...\" - the negation is lost, so the meaning reverses."),
+  H2("5.3 Ablation: testing the choices"),
+  P("To justify these choices with data, we scored the **development set** (the 378 clean reviews **not** in the 1,000-review test sample) with five pipelines, using default thresholds. Using a separate development set means the test sample never influenced any decision."),
+  ...table([["Model", "Pre-processing", "Accuracy", "Macro-F1", "Chosen"], ...abl.slice(1)],
+    [1200, 4760, 1100, 1100, 1200], "Pre-processing ablation on the development set (378 reviews)", { highlight: (r) => r[4] === "yes" }),
+  ...figure("11_preprocessing_ablation.png", 6.2, "Macro-F1 of each pre-processing pipeline on the development set"),
+  B("**VADER:** light cleaning (P1) is as good as any option, and anything that removes stop words hurts. Removing all stop words drops macro-F1 from 0.455 to 0.416. The dataset is already fairly clean, so P1 gives the same score as raw text, but it protects against the HTML and URLs we found."),
+  B("**TextBlob:** P3 (remove stop words but keep negations, then lemmatise) is clearly best (0.506 vs 0.460 for light cleaning). P4, which also removes \"not\", is worse (0.492). This confirms that **negations must be kept**."),
+  B("Same input data, opposite best pipelines: **pre-processing has to match the model**."),
+);
+
+// 6. Sampling + models
+children.push(
+  pageBreak(),
+  H1("6. Sampling and Lexicon Models"),
+  H2("6.1 Random sample of 1,000 reviews"),
+  P("We randomly selected **1,000 reviews** from the clean pool of 1,378 unique reviews (pandas sample, random_state = 42). The remaining 378 reviews form the development set used in Sections 5.3 and 6.4. Because we sample from unique reviews, no review can appear in both sets."),
+  ...table([["Set", "Negative", "Neutral", "Positive", "Total"], ["Test sample", "38 (3.8%)", "51 (5.1%)", "911 (91.1%)", "1,000"], ["Development set", "18", "13", "347", "378"]],
+    [2560, 1700, 1700, 1700, 1700], "Class counts in the test sample and development set"),
+  P("The sample keeps the natural class balance, as the assignment asks for a random sample. We did not oversample the minority classes, so the results reflect what a lexicon model would face on real Amazon beauty reviews."),
+  H2("6.2 Model 1: VADER"),
+  B("**Package:** vaderSentiment 3.3 (Hutto and Gilbert, 2014)."),
+  B("**How it works:** each word is looked up in a human-rated lexicon of about 7,500 entries scored from -4 to +4. Five rules then adjust the scores: punctuation (\"!\" adds intensity), capitals, degree words (\"extremely\", \"slightly\"), \"but\" (the second clause gets more weight), and negation within three words (\"not\" flips and dampens). The adjusted sum is normalised to a **compound score in [-1, +1]**."),
+  B("**Decision rule (default):** compound >= 0.05 Positive, <= -0.05 Negative, otherwise Neutral (the thresholds recommended by the authors)."),
+  B("**Assumptions:** sentiment is carried by individual words and short-range rules, and every sentence of a review counts equally."),
+  H2("6.3 Model 2: TextBlob"),
+  B("**Package:** TextBlob 0.20 with its default PatternAnalyzer (lexicon from the Pattern library, De Smedt and Daelemans, 2012)."),
+  B("**How it works:** about 2,900 English words (mostly adjectives) have polarity in [-1, 1] and subjectivity in [0, 1]. TextBlob finds these words, multiplies by a preceding intensifier (\"very\" x 1.3), multiplies by -0.5 when a negation directly precedes the word, and **averages** the scores over the text. The output is **polarity in [-1, +1]** plus subjectivity."),
+  B("**Decision rule (default):** polarity > 0 Positive, < 0 Negative, = 0 Neutral."),
+  B("**Assumptions:** opinion is mostly expressed by adjectives, and averaging works for long texts."),
+  H2("6.4 Fine-tuning: threshold search"),
+  P("Lexicon models have no weights to train, but the **thresholds** that turn a score into a class can be tuned. 3-star reviews are usually worded mildly positively, so the default neutral band (almost zero width) is too narrow. We grid-searched the positive and negative thresholds on the **development set** to maximise macro-F1:"),
+  B("**VADER:** Positive >= 0.40, Negative <= -0.40 (development macro-F1 0.555)."),
+  B("**TextBlob:** Positive >= 0.075, Negative <= 0.05 (development macro-F1 0.596)."),
+  P("Both tuned and default versions are evaluated on the test sample in Section 7. Figure 12 shows why tuning is needed: the score distributions of the three classes overlap heavily, and most Neutral reviews score above the default positive threshold."),
+  ...figure("12_score_distribution_by_label.png", 6.5, "Score distribution by true label on the test sample (dashed lines = default thresholds)"),
+);
+
+// 7. Validation
+const comp = tbl("09_comparison_table");
+const compRows = [["Model", "Accuracy", "Macro P", "Macro R", "Macro-F1", "Weighted F1", "F1 Neg", "F1 Neu", "F1 Pos"],
+  ...comp.slice(1).map((r) => [r[0], ...r.slice(1).map(f3)])];
+children.push(
+  pageBreak(),
+  H1("7. Validation and Comparison"),
+  P("Both models were run on the 1,000-review test sample and compared with the true labels using accuracy, macro and weighted precision / recall / F1, per-class F1 and confusion matrices. **Macro-F1 is our main metric**: it gives the three classes equal weight, so a model cannot score well by ignoring the 9% of non-positive reviews. A majority-class baseline (always \"Positive\") is included for reference."),
+  ...table(compRows, [2760, 820, 780, 780, 860, 900, 820, 820, 820], "Comparison table on the 1,000-review test sample",
+    { highlight: (r) => r[0].startsWith("VADER (default"), fontSize: 16 }),
+  ...figure("14_model_comparison.png", 6.5, "Main metrics for each model and the baseline"),
+  H2("7.1 Per-class results (default thresholds)"),
+  ...table([
+    ["Class", "Support", "VADER P", "VADER R", "VADER F1", "TextBlob P", "TextBlob R", "TextBlob F1"],
+    ["Negative", "38", "0.444", "0.421", "0.432", "0.231", "0.237", "0.234"],
+    ["Neutral", "51", "0.028", "0.020", "0.023", "0.051", "0.039", "0.044"],
+    ["Positive", "911", "0.942", "0.959", "0.951", "0.927", "0.939", "0.933"],
+    ["Macro avg", "1000", "0.471", "0.467", "0.469", "0.403", "0.405", "0.404"],
+  ], [1360, 1000, 1000, 1000, 1000, 1000, 1000, 1000], "Classification report per class"),
+  ...figure("13_confusion_matrices.png", 5.6, "Confusion matrices (row % = recall per true class)"),
+  H2("7.2 Interpretation"),
+  B("**VADER is the better model.** With default thresholds it reaches macro-F1 **0.469** vs 0.404 for TextBlob, and it is better on Negative reviews (F1 0.43 vs 0.23). Its rules for \"but\", emphasis and negation capture more of the meaning of complaints."),
+  B("**Accuracy is misleading.** The always-Positive baseline has the highest accuracy (91.1%) but a macro-F1 of only 0.318 and finds no negative or neutral review at all. Both lexicon models are slightly less accurate than the baseline but far more useful."),
+  B("**Neutral is almost never detected** (F1 0.02 to 0.04 with default thresholds). 73% of neutral reviews are called Positive by VADER and 84% by TextBlob. 3-star reviews mix praise and complaints, and politely worded criticism still contains many positive words."),
+  B("**Threshold tuning helps VADER** (macro-F1 0.469 -> 0.490, Neutral F1 0.02 -> 0.18), at the cost of accuracy (89.1% -> 85.9%) because more positive reviews fall into the wider neutral band. **For TextBlob the tuned thresholds did not carry over** to the test sample (0.404 -> 0.391): the development set has only 13 neutral reviews, which is too few to tune reliably. We therefore report the **default thresholds as the main result** and the tuned ones as an experiment."),
+  B("**Errors are lopsided:** the most common mistake for both models is predicting Positive for a Neutral or Negative review, which matches the score overlap in Figure 12."),
+  H2("7.3 Agreement between the models"),
+  P("The two models give the same label on **91.8%** of reviews, but **Cohen's kappa is only 0.42** and their raw scores correlate weakly (**r = 0.27**, Figure 15). Most of the agreement comes from easy positive reviews: both are right on 85.0% of reviews and both are wrong on 9.3%. They disagree mostly on exactly the hard cases, which suggests that combining them, or using a learned model in Phase 2, could help."),
+  ...figure("15_vader_vs_textblob.png", 4.0, "VADER compound vs TextBlob polarity for each test review, coloured by true label"),
+  H2("7.4 Effect of review length (the long-review outliers)"),
+  ...table([["Words in review", "Reviews", "VADER accuracy", "TextBlob accuracy"], ...T.rows["10_accuracy_by_length"].map((r) => [r[0], String(parseInt(r[1])), f3(r[2]), f3(r[3])])],
+    [2340, 2340, 2340, 2340], "Accuracy by review length on the test sample"),
+  ...figure("16_accuracy_by_length.png", 4.8, "Accuracy by review length"),
+  P("Both models work best on reviews of 11-30 words (VADER 94.8%) and get worse on **reviews over 150 words (73.7% for both)**. The long outliers we kept in Section 3.3 are mostly 2-4 star reviews that describe pros and cons in detail. VADER adds up many mildly positive words and saturates near +1, while TextBlob's average gets diluted towards zero. This is a real weakness of lexicon models, not a data error, so keeping these reviews gives an honest estimate."),
+  H2("7.5 Error analysis"),
+  P("The most confident mistakes (Table 16) show recurring patterns:"),
+  ...table([["Model", "True", "Predicted", "Score", "Review (start)"],
+    ...T.rows["12_error_examples"].filter((_, i) => [0, 3, 5, 7, 9, 10].includes(i)).map((r) => [r[0], r[1], r[2], r[3], r[4].replace(/&nbsp;.*$/, "...").slice(0, 150) + "..."])],
+    [1100, 1000, 1100, 800, 5360], "Examples of confident errors", { fontSize: 16 }),
+  B("**Polite criticism:** \"Not So Great for Volume... It made my hair a bit smoother, but...\" contains many positive words, so VADER scores it +0.98 even though it is a 2-star review."),
+  B("**Sentiment in the title but not the body:** \"I Am Not Happy With the Explanation...\" followed by a long, neutral description."),
+  B("**Misspellings:** \"dissapointed\" and \"Unpleasent\" are not in either lexicon, so the negative word is missed."),
+  B("**Domain meaning:** \"Didn't smell like redcurrant and basil\" is a complaint about a beauty product, but contains no negative word."),
+  H2("7.6 Robustness check on all unique reviews"),
+  P("Because the test sample is a single random draw, we also ran both models on all 1,378 unique reviews. The results are almost the same (Table 17), so the 1,000-review sample is representative."),
+  ...table([["Model", "Accuracy", "Macro-F1", "F1 Neg", "F1 Neu", "F1 Pos"],
+    ...T.rows["11_full_pool_metrics"].map((r) => [r[0], f3(r[1]), f3(r[4]), f3(r[6]), f3(r[7]), f3(r[8])])],
+    [3360, 1200, 1200, 1200, 1200, 1200], "Default-threshold models on all 1,378 unique reviews"),
+);
+
+// 8-10 Conclusions, assumptions, references
+children.push(
+  pageBreak(),
+  H1("8. Conclusions"),
+  N("**Data quality first:** 73.8% of the All Beauty 5-core rows are copies of the same review under different product variants. De-duplicating reduces the data to 1,379 reviews and changes the per-user and per-product statistics a lot.", "numbers2"),
+  N("**The task is very imbalanced** (91% positive), so we judge models by macro-F1 and against a majority baseline rather than by accuracy.", "numbers2"),
+  N("**VADER outperforms TextBlob** on this data: macro-F1 0.469 vs 0.404 with default thresholds, and 0.490 with tuned thresholds. It is especially better on negative reviews, thanks to its contrast, negation and emphasis rules.", "numbers2"),
+  N("**Pre-processing must match the model:** light cleaning is best for VADER, while TextBlob improves when stop words are removed but negations are kept. Removing negations hurts both.", "numbers2"),
+  N("**Lexicons cannot detect neutral reviews** and struggle with long, mixed reviews. These are the clearest targets for the machine-learning models in Phase 2, which can learn that \"but it broke me out\" outweighs \"smells nice\" in this domain.", "numbers2"),
+  N("For Phase 2 we will reuse the de-duplicated data and the same 1,000-review sample, so the lexicon and machine-learning models can be compared on exactly the same reviews.", "numbers2"),
+  H1("9. Assumptions"),
+  B("The star rating is the true sentiment of the review. In reality some 3-star reviews are clearly positive or negative in tone, which caps how well any text model can score."),
+  B("Reviews with the same reviewer, text and timestamp are the same review, even when they are listed under different asins."),
+  B("All reviews are in English (no review had more than 20% non-ASCII characters)."),
+  B("Auto-generated \"X Stars\" summaries are written by Amazon, not the reviewer, so they are removed from the model input."),
+  B("The random sample (seed 42) is representative of the dataset. This was checked against all unique reviews in Section 7.6."),
+  B("The package default thresholds are used as the main result. Tuned thresholds come only from the 378-review development set."),
+  H1("10. References"),
+  ...[
+    "Ni, J., Li, J., & McAuley, J. (2019). Justifying recommendations using distantly-labeled reviews and fine-grained aspects. In Proceedings of EMNLP-IJCNLP 2019 (pp. 188-197). Dataset: https://nijianmo.github.io/amazon/index.html",
+    "McAuley, J., Targett, C., Shi, Q., & van den Hengel, A. (2015). Image-based recommendations on styles and substitutes. In Proceedings of SIGIR 2015. Original dataset: http://jmcauley.ucsd.edu/data/amazon/",
+    "Hutto, C. J., & Gilbert, E. (2014). VADER: A parsimonious rule-based model for sentiment analysis of social media text. In Proceedings of ICWSM-14. https://github.com/cjhutto/vaderSentiment",
+    "Loria, S. (2018). TextBlob: Simplified text processing (documentation). https://textblob.readthedocs.io/en/dev/quickstart.html",
+    "De Smedt, T., & Daelemans, W. (2012). Pattern for Python. Journal of Machine Learning Research, 13, 2063-2067.",
+    "Baccianella, S., Esuli, A., & Sebastiani, F. (2010). SentiWordNet 3.0: An enhanced lexical resource for sentiment analysis and opinion mining. In Proceedings of LREC 2010. http://nmis.isti.cnr.it/sebastiani/Publications/LREC10.pdf",
+    "Bird, S., Klein, E., & Loper, E. (2009). Natural Language Processing with Python. O'Reilly Media. (NLTK)",
+    "Pedregosa, F., et al. (2011). Scikit-learn: Machine learning in Python. Journal of Machine Learning Research, 12, 2825-2830.",
+  ].map((r) => new Paragraph({ numbering: { reference: "refs", level: 0 }, children: [new TextRun(r)], spacing: { after: 80 } })),
+);
+
+// Appendices
+const planRows = [["Week", "Task", "Owner", "Status"],
+  ["Week 3", "Teams formed, dataset assigned (All Beauty)", "All", "Done"],
+  ["Week 4", "Download data, initial exploration", "[Name]", "Done"],
+  ["Week 5", "Checkpoint 1: exploration and pre-processing", "[Name]", "Done"],
+  ["Week 6", "Checkpoint 2: lexicon study and per-model pre-processing", "[Name]", "Done"],
+  ["Week 7", "VADER / TextBlob models, validation, comparison", "[Name]", "Done"],
+  ["Week 8", "Report, PowerPoint, Phase 1 demo (Nov 5)", "All", "In progress"],
+  ["Week 9-12", "Phase 2: ML models, recommender study, LLM tasks", "[Name]", "Planned"],
+  ["Week 14", "Phase 2 presentation and final report", "All", "Planned"]];
+const meetRows = [["Date / time", "Attendees", "Subjects discussed", "Assignments"],
+  ["[dd-mm-yyyy hh:mm]", "[names]", "Kick-off, dataset review", "[who does what]"],
+  ["[dd-mm-yyyy hh:mm]", "[names]", "Exploration findings, duplicate issue", "[who does what]"],
+  ["[dd-mm-yyyy hh:mm]", "[names]", "Lexicon choice, pre-processing ablation", "[who does what]"],
+  ["[dd-mm-yyyy hh:mm]", "[names]", "Results review, report and slides split", "[who does what]"],
+  ["", "", "", ""]];
+children.push(
+  pageBreak(),
+  H1("Appendix 1: Project Plan"),
+  P("*Update weekly. Owners are placeholders for the team to fill in.*".replace(/\*/g, "")),
+  ...table(planRows, [1300, 4860, 1700, 1500], "Project plan"),
+  H1("Appendix 2: Meeting Register"),
+  ...table(meetRows, [1900, 1900, 3060, 2500], "Meeting register"),
+  H1("Appendix 3: Running the Code"),
+  P("Files submitted: **team2_phase1_lexicon_sentiment.py** (documented source code), ./figures (16 charts), ./results (CSV tables and run_log.txt with the full console output)."),
+  new Paragraph({ children: [new TextRun({ text: "pip install pandas numpy matplotlib seaborn nltk scikit-learn vaderSentiment textblob wordcloud", font: "Consolas", size: 18 })], shading: { fill: "F2F2F2", type: ShadingType.CLEAR, color: "auto" }, spacing: { after: 60 } }),
+  new Paragraph({ children: [new TextRun({ text: "python team2_phase1_lexicon_sentiment.py", font: "Consolas", size: 18 })], shading: { fill: "F2F2F2", type: ShadingType.CLEAR, color: "auto" }, spacing: { after: 160 } }),
+  P("The script downloads the dataset automatically (about 0.6 MB) if ./data/All_Beauty_5.json.gz is missing, and needs Python 3.10 or later. It is organised in sections that follow the assignment steps (Step 1 to Step 7), and every function is commented."),
+);
+
+// ---------- document ----------
+const doc = new Document({
+  creator: "COMP 262 Team 2",
+  title: "Phase 1 - Lexicon Sentiment Analysis of Amazon All Beauty Reviews",
+  styles: {
+    default: { document: { run: { font: FONT, size: 22 } } },
+    paragraphStyles: [
+      { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { font: FONT, size: 32, bold: true, color: ACCENT }, paragraph: { spacing: { before: 360, after: 160 }, keepNext: true, outlineLevel: 0 } },
+      { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { font: FONT, size: 26, bold: true, color: "333333" }, paragraph: { spacing: { before: 240, after: 100 }, keepNext: true, outlineLevel: 1 } },
+      { id: "Heading3", name: "Heading 3", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { font: FONT, size: 22, bold: true }, paragraph: { spacing: { before: 160, after: 80 }, keepNext: true, outlineLevel: 2 } },
+    ],
+  },
+  numbering: { config: [
+    { reference: "bullets", levels: [{ level: 0, format: LevelFormat.BULLET, text: "\u2022", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 270 } } } },
+                                     { level: 1, format: LevelFormat.BULLET, text: "\u2013", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 1080, hanging: 270 } } } }] },
+    { reference: "numbers", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 300 } } } }] },
+    { reference: "numbers2", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 540, hanging: 300 } } } }] },
+    { reference: "refs", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "[%1]", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 600, hanging: 600 } } } }] },
+  ] },
+  sections: [{
+    properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } }, titlePage: true },
+    headers: { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "COMP 262 Project - Team 2 - Phase 1", size: 16, color: "888888" })] })] }) },
+    footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: ["Page ", PageNumber.CURRENT], size: 16, color: "888888" })] })] }) },
+    children,
+  }],
+});
+
+Packer.toBuffer(doc).then((buf) => {
+  const out = path.join(PROJ, "Team2_Phase1_Analysis_Report.docx");
+  fs.writeFileSync(out, buf);
+  console.log("wrote", out);
+});
